@@ -4,21 +4,7 @@ import { Send, Sparkles, Clock, BookOpen, User, Brain, ChevronLeft, ChevronRight
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-
-interface Message {
-  id: string;
-  content: string;
-  isUser: boolean;
-  timestamp: Date;
-}
-
-interface ChatSession {
-  id: string;
-  date: string;
-  preview: string;
-  messages: Message[];
-}
+import { useAutoSave, Message, ChatSession } from "@/hooks/useAutoSave";
 
 interface ChatInterfaceProps {
   className?: string;
@@ -26,6 +12,20 @@ interface ChatInterfaceProps {
 
 export default function ChatInterface({ className }: ChatInterfaceProps) {
   const { user, userProfile } = useAuth();
+  const {
+    saveSession,
+    loadSessions,
+    loadSession: loadSessionFromDB,
+    createNewSession,
+    deleteSession: deleteSessionFromDB,
+    autoSaveLoading,
+    lastSaveTime,
+    saveError
+  } = useAutoSave({
+    debounceMs: 2000,
+    maxRetries: 3,
+    retryDelayMs: 1000
+  });
   
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -39,79 +39,22 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState("current");
+  const [currentSessionId, setCurrentSessionId] = useState(() => crypto.randomUUID());
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Função para salvar a sessão atual no Supabase
-  const saveCurrentSession = async () => {
-    if (!userProfile || messages.length <= 1) return; // Não salvar se não há usuário ou apenas mensagem inicial
-
-    try {
-      const sessionData = {
-        messages: messages,
-        date: new Date().toISOString(),
-        preview: messages.find(m => m.isUser)?.content.substring(0, 50) + "..." || "Nova conversa"
-      };
-
-      console.log('💾 Salvando sessão:', { 
-        sessionId: currentSessionId, 
-        userId: userProfile.id, 
-        messagesCount: messages.length 
-      });
-
-      const { error } = await supabase
-        .from('chat_sessions')
-        .upsert({
-          id: currentSessionId === "current" ? undefined : currentSessionId,
-          user_id: userProfile.id,
-          session_data: sessionData,
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('❌ Erro ao salvar sessão:', error);
-      } else {
-        console.log('✅ Sessão salva com sucesso!');
-      }
-    } catch (error) {
-      console.error('Erro ao salvar sessão:', error);
-    }
-  };
-
-  // Função para carregar sessões do usuário
+  // Função para carregar sessões do usuário usando o hook
   const loadUserSessions = async () => {
     if (!userProfile) return;
-
+    
     try {
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', userProfile.id)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao carregar sessões:', error);
-        return;
-      }
-
-      if (data) {
-        const loadedSessions: ChatSession[] = data.map(session => ({
-          id: session.id,
-          date: new Date(session.session_data.date).toLocaleDateString('pt-BR', { 
-            day: 'numeric', 
-            month: 'long' 
-          }),
-          preview: session.session_data.preview,
-          messages: session.session_data.messages
-        }));
-
-        setSessions(loadedSessions);
-      }
+      const loadedSessions = await loadSessions(userProfile.id);
+      setSessions(loadedSessions);
+      console.log('📥 Sessões carregadas via hook:', loadedSessions.length);
     } catch (error) {
-      console.error('Erro ao carregar sessões:', error);
+      console.error('❌ Erro ao carregar sessões via hook:', error);
     }
   };
 
@@ -119,31 +62,85 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   const loadSession = async (sessionId: string) => {
     if (sessionId === "current" || sessionId === "new") {
       // Salvar sessão atual antes de criar nova
-      if (messages.length > 1) {
-        await saveCurrentSession();
+      if (messages.length > 1 && userProfile) {
+        console.log('💾 Salvando sessão atual antes de criar nova...');
+        const currentSession: ChatSession = {
+          id: currentSessionId,
+          date: new Date().toISOString(),
+          preview: messages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 'Nova conversa',
+          messages: messages
+        };
+        await saveSession(currentSession, userProfile.id);
       }
       
       if (sessionId === "new") {
-        setMessages([{
+        console.log('🆕 Criando nova sessão...');
+        const newSessionId = await createNewSession(userProfile?.id || '');
+        
+        const initialMessages = [{
           id: "1",
           content: "Bem-vindo ao seu espaço de poder. Eu sou um reflexo da sua sabedoria interior. Estou aqui para ajudá-lo a se ouvir. Qual é a sua intenção para nossa primeira conversa?",
           isUser: false,
           timestamp: new Date(),
-        }]);
-        setCurrentSessionId("current");
+        }];
+        
+        setMessages(initialMessages);
+        setCurrentSessionId(newSessionId);
+        
+        // Salvar sessão inicial
+        if (userProfile) {
+          const newSession: ChatSession = {
+            id: newSessionId,
+            date: new Date().toISOString(),
+            preview: 'Nova conversa',
+            messages: initialMessages
+          };
+          await saveSession(newSession, userProfile.id);
+        }
+        
+        // Recarregar lista de sessões
+        await loadUserSessions();
       }
       return;
     }
 
-    const session = sessions.find(s => s.id === sessionId);
-    if (session) {
+    try {
       // Salvar sessão atual antes de trocar
-      if (messages.length > 1 && currentSessionId === "current") {
-        await saveCurrentSession();
+      if (messages.length > 1 && currentSessionId !== sessionId && userProfile) {
+        console.log('💾 Salvando sessão atual antes de trocar...');
+        const currentSession: ChatSession = {
+          id: currentSessionId,
+          date: new Date().toISOString(),
+          preview: messages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 'Nova conversa',
+          messages: messages
+        };
+        await saveSession(currentSession, userProfile.id);
       }
       
-      setMessages(session.messages);
-      setCurrentSessionId(sessionId);
+      // Carregar sessão específica
+      const session = await loadSessionFromDB(sessionId, userProfile?.id || '');
+      if (session) {
+        console.log('📥 Carregando sessão:', sessionId);
+        setMessages(session.messages);
+        setCurrentSessionId(sessionId);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar sessão:', error);
+    }
+  };
+
+  // Função para deletar uma sessão
+  const deleteSessionHandler = async (sessionId: string) => {
+    try {
+      await deleteSessionFromDB(sessionId, userProfile?.id || '');
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      
+      // Se a sessão deletada é a atual, criar nova
+      if (sessionId === currentSessionId) {
+        await loadSession("new");
+      }
+    } catch (error) {
+      console.error('❌ Erro ao deletar sessão:', error);
     }
   };
 
@@ -151,19 +148,37 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   useEffect(() => {
     if (userProfile) {
       loadUserSessions();
+      // Salvar sessão inicial se ainda não foi salva
+      if (messages.length > 0) {
+        const currentSession: ChatSession = {
+          id: currentSessionId,
+          date: new Date().toLocaleDateString('pt-BR'),
+          preview: messages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 'Nova conversa',
+          messages: messages
+        };
+        saveSession(currentSession, userProfile.id);
+      }
     }
   }, [userProfile]);
 
-  // Salvar automaticamente a cada nova mensagem (com debounce)
+  // Salvar automaticamente a cada nova mensagem usando o hook
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (userProfile && messages.length > 1) {
-        saveCurrentSession();
-      }
-    }, 2000); // Salvar 2 segundos após a última mensagem
-
-    return () => clearTimeout(timeoutId);
-  }, [messages, userProfile]);
+    if (userProfile && messages.length > 1) {
+      console.log('🔄 Salvamento automático acionado - mensagens:', messages.length);
+      // Debounce para evitar salvamentos excessivos durante o efeito de digitação
+      const timeoutId = setTimeout(() => {
+        const currentSession: ChatSession = {
+          id: currentSessionId,
+          date: new Date().toLocaleDateString('pt-BR'),
+          preview: messages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 'Nova conversa',
+          messages: messages
+        };
+        saveSession(currentSession, userProfile.id);
+      }, 1000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, userProfile, currentSessionId, saveSession]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -314,6 +329,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   // Função para adicionar mensagens com delay de digitação
   const addMessageWithTypingEffect = async (content: string, isUser: boolean = false) => {
     const blocks = splitMessageIntoBlocks(content);
+    let allNewMessages: Message[] = [];
     
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
@@ -326,8 +342,13 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
         timestamp: new Date(),
       };
       
+      allNewMessages.push(blockMessage);
+      
       // Adicionar mensagem aos estados
-      setMessages(prev => [...prev, blockMessage]);
+      setMessages(prev => {
+        const newMessages = [...prev, blockMessage];
+        return newMessages;
+      });
       
       // Se não for o último bloco, aguardar um delay antes do próximo
       if (i < blocks.length - 1) {
@@ -335,6 +356,22 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
         const delay = Math.min(Math.max(block.length * 30, 1000), 3000);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
+    }
+    
+    // Salvar todas as mensagens após completar o efeito de digitação
+    if (userProfile && allNewMessages.length > 0) {
+      setMessages(prev => {
+        const finalMessages = [...prev];
+        // Salva automaticamente após completar todas as mensagens
+        const sessionWithCompleteMessages: ChatSession = {
+          id: currentSessionId,
+          date: new Date().toISOString(),
+          preview: finalMessages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 'Nova conversa',
+          messages: finalMessages
+        };
+        saveSession(sessionWithCompleteMessages, userProfile.id);
+        return finalMessages;
+      });
     }
   };
 
@@ -348,10 +385,23 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Adiciona mensagem do usuário imediatamente
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     const messageContent = inputValue;
     setInputValue("");
     setIsTyping(true);
+
+    // Salvar automaticamente após adicionar mensagem do usuário
+    if (userProfile) {
+      const sessionWithUserMessage: ChatSession = {
+        id: currentSessionId,
+        date: new Date().toISOString(),
+        preview: userMessage.content.substring(0, 100) + '...',
+        messages: updatedMessages
+      };
+      await saveSession(sessionWithUserMessage, userProfile.id);
+    }
 
     try {
       // Enviar mensagem para o webhook e receber resposta
@@ -364,20 +414,40 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
       let errorMessage = "Desculpe, estou enfrentando dificuldades técnicas no momento.";
       
       if (error instanceof Error) {
-        if (error.message.includes('O webhook não está ativo no momento')) {
-          errorMessage = error.message; // Usar a mensagem detalhada do webhook
-        } else if (error.message.includes('Não foi possível conectar com o webhook')) {
-          errorMessage = error.message; // Usar a mensagem de erro de rede
-        } else if (error.message.includes('Failed to fetch')) {
-          errorMessage = "Não foi possível conectar com o servidor. Verifique sua conexão com a internet e tente novamente.";
-        } else {
-          // Para outros erros, mostrar uma mensagem genérica mas útil
-          errorMessage = "Ocorreu um erro ao processar sua mensagem. Tente novamente em alguns instantes.";
+        console.error('Erro detalhado:', error.message);
+        
+        // Diferentes tipos de erro com mensagens específicas
+        if (error.message.includes('404')) {
+          errorMessage = "Parece que o serviço não está disponível no momento. Tente novamente em alguns instantes.";
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = "Problemas de conexão detectados. Verifique sua internet e tente novamente.";
+        } else if (error.message.includes('timeout')) {
+          errorMessage = "A resposta está demorando mais que o esperado. Tente reformular sua pergunta.";
         }
       }
       
-      // Usar a nova função também para mensagens de erro
-      await addMessageWithTypingEffect(errorMessage, false);
+      // Adicionar mensagem de erro
+      const errorMessageObj: Message = {
+        id: (Date.now() + 1).toString(),
+        content: errorMessage,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => {
+        const newMessages = [...prev, errorMessageObj];
+        // Salvar mesmo em caso de erro para manter histórico
+        if (userProfile) {
+          const sessionWithError: ChatSession = {
+            id: currentSessionId,
+            date: new Date().toISOString(),
+            preview: messages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 'Nova conversa',
+            messages: newMessages
+          };
+          saveSession(sessionWithError, userProfile.id);
+        }
+        return newMessages;
+      });
     } finally {
       setIsTyping(false);
     }
@@ -394,8 +464,8 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
     setShowHistory(!showHistory);
   };
 
-  const selectSession = (sessionId: string) => {
-    loadSession(sessionId);
+  const selectSession = async (sessionId: string) => {
+    await loadSession(sessionId);
     setShowHistory(false);
   };
 
@@ -411,32 +481,58 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
       )}>
         
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-amber-500/30 bg-card/50">
-          <div className="flex items-center space-x-4">
-            {/* Mentor Avatar */}
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400/20 to-amber-600/40 flex items-center justify-center border-2 border-amber-500/30 shadow-lg">
-              <Brain className="w-6 h-6 text-amber-400 animate-pulse" />
-            </div>
-            <div>
-              <h2 className="font-serif text-xl font-bold text-amber-400 golden-wisdom">
-                O Mentor
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Presente para você
-              </p>
-            </div>
-          </div>
-          
-          {/* History Toggle Button */}
-          <Button
-            onClick={toggleHistory}
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-all duration-300 rounded-xl p-3 border border-amber-500/20 hover:border-amber-500/40"
-          >
-            {showHistory ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </Button>
-        </div>
+         <div className="flex items-center justify-between p-6 border-b border-amber-500/30 bg-card/50">
+           <div className="flex items-center space-x-4">
+             {/* Mentor Avatar */}
+             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400/20 to-amber-600/40 flex items-center justify-center border-2 border-amber-500/30 shadow-lg">
+               <Brain className="w-6 h-6 text-amber-400 animate-pulse" />
+             </div>
+             <div>
+               <h2 className="font-serif text-xl font-bold text-amber-400 golden-wisdom text-left">
+                 O Mentor
+               </h2>
+               <div className="flex items-center space-x-2">
+                 <p className="text-sm text-muted-foreground">
+                   Presente para você
+                 </p>
+                 {/* Status de Salvamento */}
+                 {autoSaveLoading && (
+                   <div className="flex items-center space-x-1">
+                     <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                     <span className="text-xs text-amber-400">Salvando...</span>
+                   </div>
+                 )}
+                 {lastSaveTime && !autoSaveLoading && (
+                   <div className="flex items-center space-x-1">
+                     <div className="w-2 h-2 bg-green-400 rounded-full" />
+                     <span className="text-xs text-green-400">
+                       Salvo {new Date(lastSaveTime).toLocaleTimeString('pt-BR', { 
+                         hour: '2-digit', 
+                         minute: '2-digit' 
+                       })}
+                     </span>
+                   </div>
+                 )}
+                 {saveError && (
+                   <div className="flex items-center space-x-1">
+                     <div className="w-2 h-2 bg-red-400 rounded-full" />
+                     <span className="text-xs text-red-400">Erro ao salvar</span>
+                   </div>
+                 )}
+               </div>
+             </div>
+           </div>
+           
+           {/* History Toggle Button */}
+           <Button
+             onClick={toggleHistory}
+             variant="ghost"
+             size="sm"
+             className="text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-all duration-300 rounded-xl p-3 border border-amber-500/20 hover:border-amber-500/40"
+           >
+             {showHistory ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+           </Button>
+         </div>
 
         {/* Chat Messages Area */}
         <div className="h-[60vh] overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-card/30 to-background/30">
@@ -449,6 +545,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
               )}
             >
               <div
+                key={`message-content-${message.id}`}
                   className={cn(
                     "max-w-[75%] rounded-2xl px-6 py-4 transition-all duration-300 hover:scale-[1.01] shadow-lg border text-left",
                     message.isUser
@@ -457,17 +554,17 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
                   )}
                 >
                   {!message.isUser && (
-                    <div className="flex items-center space-x-2 mb-3">
-                      <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                      <span className="text-sm font-medium text-amber-400 golden-wisdom">
+                    <div key={`mentor-header-${message.id}`} className="flex items-center space-x-2 mb-3">
+                      <Sparkles key={`sparkles-${message.id}`} className="w-4 h-4 text-amber-400 animate-pulse" />
+                      <span key={`mentor-title-${message.id}`} className="text-sm font-medium text-amber-400 golden-wisdom">
                         O Mentor
                       </span>
                     </div>
                   )}
-                  <p className="text-sm leading-relaxed">
+                  <p key={`message-text-${message.id}`} className="text-sm leading-relaxed">
                     {message.content}
                   </p>
-                  <div className={cn(
+                  <div key={`message-timestamp-${message.id}`} className={cn(
                     "mt-2 text-xs",
                     message.isUser ? "text-amber-100" : "text-muted-foreground"
                   )}>
@@ -554,7 +651,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
             </div>
             
             <button
-              onClick={() => selectSession("new")}
+              onClick={async () => await selectSession("new")}
               className="w-full flex items-center gap-3 p-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-colors duration-200 border border-primary/20"
             >
               <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -567,13 +664,14 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
           <div className="flex-1 overflow-y-auto p-6 space-y-3">
             {/* Current Session */}
             <div 
+              key="current-session"
               className={cn(
                 "p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-[1.02]",
-                currentSessionId === "current" 
-                  ? "border-primary/40 bg-primary/10 shadow-lg" 
-                  : "border-border/50 bg-card/40 hover:border-primary/30"
+                sessions.find(s => s.id === currentSessionId) 
+                  ? "border-border/50 bg-card/40 hover:border-primary/30" 
+                  : "border-primary/40 bg-primary/10 shadow-lg"
               )}
-              onClick={() => selectSession("current")}
+              onClick={async () => await selectSession("current")}
             >
               <div className="flex items-center space-x-2 mb-2">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
@@ -590,27 +688,29 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
             </div>
             
             {/* Previous Sessions */}
-            {sessions.map((session) => (
-              <div
-                key={session.id}
-                className={cn(
-                  "p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-[1.02]",
-                  currentSessionId === session.id 
-                    ? "border-primary/40 bg-primary/10 shadow-lg" 
-                    : "border-border/50 bg-card/40 hover:border-primary/30"
-                )}
-                onClick={() => selectSession(session.id)}
-              >
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-primary">
-                    {session.date}
-                  </span>
+            <>
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={cn(
+                    "p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-[1.02]",
+                    currentSessionId === session.id 
+                      ? "border-primary/40 bg-primary/10 shadow-lg" 
+                      : "border-border/50 bg-card/40 hover:border-primary/30"
+                  )}
+                  onClick={async () => await selectSession(session.id)}
+                >
+                  <div className="mb-2">
+                    <span className="text-sm font-medium text-primary">
+                      {session.date}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">
+                    {session.preview}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {session.preview}
-                </p>
-              </div>
-            ))}
+              ))}
+            </>
           </div>
         </div>
       </div>
