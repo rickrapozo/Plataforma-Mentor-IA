@@ -4,7 +4,7 @@ import { Send, Sparkles, Clock, BookOpen, User, Brain, ChevronLeft, ChevronRight
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { useAutoSave, Message, ChatSession } from "@/hooks/useAutoSave";
+import { useAutoSave, Message, ChatSession } from "@/hooks/useAutoSave.tsx";
 
 interface ChatInterfaceProps {
   className?: string;
