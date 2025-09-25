@@ -127,7 +127,7 @@ export default function Logbook() {
 
       // Tentar enviar para o webhook primeiro
       try {
-        const response = await fetch('/api/webhook', {
+        const response = await fetch('https://primary-production-33a76.up.railway.app/webhook/1d3e78ad-8168-407f-a0d5-4ff71991b0d1', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -204,7 +204,7 @@ export default function Logbook() {
         
         try {
           // Fazer nova requisição para verificar se a análise está pronta
-          const pollResponse = await fetch(`/api/webhook-response/${userProfile?.id}`, {
+          const pollResponse = await fetch(`https://primary-production-33a76.up.railway.app/webhook-response/1d3e78ad-8168-407f-a0d5-4ff71991b0d1/${userProfile?.id}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',

@@ -122,7 +122,7 @@ export default function MentorAnalysisChat({ analysis, onClose }: MentorAnalysis
 
   // Função para enviar mensagem para o webhook do n8n
   const sendMessageToWebhook = async (message: string): Promise<string> => {
-    const webhookUrl = 'https://primary-production-33a76.up.railway.app/webhook-test/1d3e78ad-8168-407f-a0d5-4ff71991b0d1';
+    const webhookUrl = 'https://primary-production-33a76.up.railway.app/webhook/1d3e78ad-8168-407f-a0d5-4ff71991b0d1';
     
     const payload = {
       message: message,
@@ -337,14 +337,26 @@ A qualidade da análise vale a espera.`;
       // Enviar mensagem para o webhook do n8n
       const mentorResponse = await sendMessageToWebhook(messageToSend);
       
-      const responseMessage: Message = {
-        id: `mentor-response-${Date.now()}`,
-        content: mentorResponse,
-        isUser: false,
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, responseMessage]);
+      // Verificar se é uma mensagem de status/processamento
+      if (mentorResponse.includes('🔄') || mentorResponse.includes('🧠') || mentorResponse.includes('⏳') || 
+          mentorResponse.includes('processando') || mentorResponse.includes('aguarde') || 
+          mentorResponse.includes('Análise em Andamento') || mentorResponse.includes('Temporariamente Indisponível')) {
+        // Para mensagens de status, mostrar imediatamente
+        const responseMessage: Message = {
+          id: `mentor-response-${Date.now()}`,
+          content: mentorResponse,
+          isUser: false,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, responseMessage]);
+        setIsTyping(false);
+      } else {
+        // Para respostas completas, usar fracionamento em blocos
+        const blocks = breakTextIntoBlocks(mentorResponse);
+        setIsTyping(false); // Parar o typing antes de iniciar a simulação
+        await simulateTyping(blocks);
+      }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       
@@ -356,7 +368,6 @@ A qualidade da análise vale a espera.`;
       };
       
       setMessages(prev => [...prev, errorMessage]);
-    } finally {
       setIsTyping(false);
     }
   };
