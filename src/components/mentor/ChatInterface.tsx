@@ -195,7 +195,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
     console.log('🔍 Debug - Dados do usuário:', {
       user: user,
       userProfile: userProfile,
-      userId: user?.id,
+      authUserId: user?.id,
       userProfileId: userProfile?.id,
       userName: userProfile?.full_name
     });
@@ -204,9 +204,9 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
       message: message,
       timestamp: new Date().toISOString(),
       sessionId: currentSessionId,
-      userId: user?.id, // Adiciona o ID do usuário autenticado
-      userProfileId: userProfile?.id, // Adiciona o ID do perfil do usuário
-      userName: userProfile?.full_name // Adiciona o nome completo do usuário
+      authUserId: user?.id, // ID de autenticação do Supabase Auth
+      userId: userProfile?.id, // ID do perfil do usuário na tabela users
+      userName: userProfile?.full_name // Nome completo do usuário
     };
 
     console.log('🚀 Enviando mensagem para webhook:', {
@@ -276,12 +276,31 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
       
       // Tratamento específico para webhook não registrado
       if (error instanceof Error && error.message === 'WEBHOOK_NOT_REGISTERED') {
-        throw new Error('O webhook não está ativo no momento. Para ativar o webhook:\n\n1. Acesse o canvas do workflow\n2. Clique no botão "Execute workflow"\n3. Tente enviar a mensagem novamente\n\nNota: No modo de teste, o webhook funciona apenas para uma chamada após a ativação.');
+        throw new Error(`🔧 Serviço Temporariamente Indisponível
+
+Olá! Parece que nosso sistema de conversação está passando por uma manutenção no momento.
+
+💡 O que você pode fazer:
+• Tente novamente em alguns minutos
+• Sua conversa foi salva e não será perdida
+• O chat ficará disponível assim que o serviço for restaurado
+
+📞 Precisa de ajuda?
+Se o problema persistir, entre em contato com nosso suporte através do chat ou email.`);
       }
       
       // Verificar se é erro de rede
       if (error instanceof Error && error.message.includes('Failed to fetch')) {
-        throw new Error('Não foi possível conectar com o webhook. Verifique sua conexão com a internet e se o webhook está disponível.');
+        throw new Error(`🌐 Problema de Conexão
+
+Parece que houve uma dificuldade na comunicação.
+
+🔧 Soluções rápidas:
+• Verifique sua conexão com a internet
+• Tente recarregar a página
+• Aguarde alguns instantes e tente novamente
+
+💪 Estamos trabalhando para resolver isso!`);
       }
       
       throw error;
@@ -373,6 +392,23 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
         return finalMessages;
       });
     }
+  };
+
+  // Função para formatar texto com destaque dourado
+  const formatTextWithGoldenHighlight = (text: string): JSX.Element => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            const highlightedText = part.slice(2, -2);
+            return <strong key={index} className="font-semibold text-amber-400 golden-wisdom">{highlightedText}</strong>;
+          }
+          return <span key={index}>{part}</span>;
+        })}
+      </>
+    );
   };
 
   const handleSend = async () => {
@@ -562,7 +598,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
                     </div>
                   )}
                   <p key={`message-text-${message.id}`} className="text-sm leading-relaxed">
-                    {message.content}
+                    {message.isUser ? message.content : formatTextWithGoldenHighlight(message.content)}
                   </p>
                   <div key={`message-timestamp-${message.id}`} className={cn(
                     "mt-2 text-xs",
