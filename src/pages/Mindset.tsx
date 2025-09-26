@@ -91,25 +91,37 @@ export default function Mindset() {
     <div className="min-h-screen pb-24 px-4 pt-6">
       <TopNavigation />
       
-      <div className="mt-20">
-        {/* Hero Section */}
-        <div className="text-center mb-8 space-y-4">
-          <div className="inline-flex items-center space-x-2 bg-primary/20 backdrop-blur-sm rounded-full px-6 py-2">
-            <Zap className="w-4 h-4 text-primary" />
-            <span className="text-primary font-medium">Arsenal Ativo</span>
+      {/* Centralized Container */}
+      <div className="max-w-7xl mx-auto">
+        <div className="mt-20">
+          {/* Hero Section - Centralized */}
+          <div className="text-center mb-12 space-y-6 max-w-4xl mx-auto">
+            <div className="inline-flex items-center space-x-2 bg-primary/20 backdrop-blur-sm rounded-full px-8 py-3 shadow-lg">
+              <Zap className="w-5 h-5 text-primary" />
+              <span className="text-primary font-medium text-lg">Arsenal Ativo</span>
+            </div>
+            
+            <h1 className="font-serif text-4xl md:text-5xl font-bold text-foreground leading-tight">
+              Arsenal Mental
+            </h1>
+            
+            <p className="text-xl text-white max-w-3xl mx-auto leading-relaxed">
+              Ferramentas e conhecimentos para fortalecer sua mente e acelerar sua transformação.
+            </p>
+            
+            {/* Decorative Element */}
+            <div className="flex items-center justify-center space-x-4 pt-4">
+              <div className="w-16 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+              <Brain className="w-6 h-6 text-primary/70" />
+              <div className="w-16 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+            </div>
           </div>
-          
-          <h1 className="font-serif text-3xl font-bold text-foreground">
-            Arsenal Mental
-          </h1>
-          
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Ferramentas e conhecimentos para fortalecer sua mente e acelerar sua transformação.
-          </p>
-        </div>
 
-        {/* Content Library */}
-        <ContentLibrary />
+          {/* Content Library - Centralized */}
+          <div className="flex justify-center">
+            <ContentLibrary />
+          </div>
+        </div>
       </div>
       
       <BottomNavigation />

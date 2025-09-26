@@ -1,0 +1,32 @@
+// SCRIPT PARA CONSOLE - TESTE RÁPIDO DO BANCO DE DADOS
+// Copie e cole este código no console do navegador
+
+async function quickTest() {
+  console.log('🔍 Teste rápido do banco de dados...');
+  
+  if (typeof window.supabase === 'undefined') {
+    console.error('❌ supabase não encontrado. Recarregue a página.');
+    return;
+  }
+  
+  const categories = ['audiobook', 'podcast', 'lecture'];
+  let total = 0;
+  
+  for (const cat of categories) {
+    const { count } = await window.supabase
+      .from('youtube_videos')
+      .select('*', { count: 'exact' })
+      .eq('category', cat);
+    
+    console.log(`📊 ${cat}: ${count || 0} vídeos`);
+    total += count || 0;
+  }
+  
+  console.log(`📈 Total: ${total} vídeos`);
+  
+  if (total === 0) {
+    console.log('⚠️ Banco vazio! Execute: window.youtubeService.forceUpdateAllCategories()');
+  }
+}
+
+quickTest();

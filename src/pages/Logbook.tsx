@@ -286,7 +286,7 @@ export default function Logbook() {
           </h1>
           
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Registre seus pensamentos, reflexões e progressos. A IA analisará suas entradas para fornecer insights valiosos.
+            Registre seus pensamentos, reflexões e progressos. O Mentor AI analisará todo contexto para lhe fornecer insights valiosos.
           </p>
         </div>
 

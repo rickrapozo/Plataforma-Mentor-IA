@@ -105,7 +105,7 @@ export default function Mentor() {
           </div>
           
           <h1 className="font-serif text-3xl font-bold text-foreground">
-            AI Mentor: O Santuário da Clareza
+            Mentor AI : O Santuário da Clareza
           </h1>
           
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">

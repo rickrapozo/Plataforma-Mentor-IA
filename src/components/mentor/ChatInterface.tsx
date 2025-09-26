@@ -542,7 +542,7 @@ Parece que houve uma dificuldade na comunicação.
                    <div className="flex items-center space-x-1">
                      <div className="w-2 h-2 bg-green-400 rounded-full" />
                      <span className="text-xs text-green-400">
-                       Salvo {new Date(lastSaveTime).toLocaleTimeString('pt-BR', { 
+                       {new Date(lastSaveTime).toLocaleTimeString('pt-BR', { 
                          hour: '2-digit', 
                          minute: '2-digit' 
                        })}
@@ -677,6 +677,19 @@ Parece que houve uma dificuldade na comunicação.
         "fixed right-4 top-1/2 transform -translate-y-1/2 h-[80vh] w-72 bg-card/95 backdrop-blur-xl rounded-3xl border border-border/50 shadow-2xl transition-all duration-500 ease-in-out z-10",
         showHistory ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
       )}>
+        {/* Collapse Button */}
+        <Button
+          onClick={toggleHistory}
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-card/95 backdrop-blur-xl border border-border/50 shadow-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-300 z-20",
+            showHistory ? "opacity-100" : "opacity-0 pointer-events-none"
+          )}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+        
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-border/50">
             <div className="flex items-center space-x-3 mb-6">
