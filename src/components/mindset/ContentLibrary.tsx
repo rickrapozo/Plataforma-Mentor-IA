@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Search, Play, Clock, BookOpen, Podcast, Loader2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -303,29 +303,12 @@ export default function ContentLibrary({ className }: ContentLibraryProps) {
   );
 }
 
-function ContentCard({ item, onVideoClick }: { item: ContentItem; onVideoClick: (item: ContentItem) => void }) {
-  const handleClick = () => {
+// Componente ContentCard memoizado
+const ContentCard = memo(({ item, onVideoClick }: { item: ContentItem; onVideoClick: (item: ContentItem) => void }) => {
+  const handleClick = useCallback(() => {
     // Abre o modal de vídeo interno
     onVideoClick(item);
-  };
-
-  const formatViewCount = (count: number): string => {
-    if (count >= 1000000) {
-      return `${(count / 1000000).toFixed(1)}M visualizações`;
-    } else if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}K visualizações`;
-    }
-    return `${count} visualizações`;
-  };
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+  }, [item, onVideoClick]);
 
   return (
     <div 
@@ -369,16 +352,11 @@ function ContentCard({ item, onVideoClick }: { item: ContentItem; onVideoClick: 
             {item.description}
           </p>
           
-          {/* Channel and Stats */}
+          {/* Channel */}
           <div className="space-y-1">
             <p className="text-primary text-xs font-medium">
               {item.channel_title}
             </p>
-            
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{formatViewCount(item.view_count)}</span>
-              <span>{formatDate(item.published_at)}</span>
-            </div>
           </div>
           
           {/* Category Badge */}
@@ -394,7 +372,9 @@ function ContentCard({ item, onVideoClick }: { item: ContentItem; onVideoClick: 
       </div>
     </div>
   );
-}
+});
+
+ContentCard.displayName = "ContentCard";
 
 function getTypeIcon(type: string) {
   switch (type) {

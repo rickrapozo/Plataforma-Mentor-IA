@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log('🔍 Buscando perfil do usuário:', userId);
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -37,13 +38,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Erro ao buscar perfil:', error);
+        console.error('❌ Erro ao buscar perfil:', error);
         return;
       }
 
+      console.log('✅ Perfil encontrado:', data);
       setUserProfile(data);
     } catch (error) {
-      console.error('Erro inesperado ao buscar perfil:', error);
+      console.error('💥 Erro inesperado ao buscar perfil:', error);
     }
   };
 
@@ -57,15 +59,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔐 Auth state change:', { event, hasSession: !!session, hasUser: !!session?.user });
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
+          console.log('👤 Usuário autenticado, buscando perfil...');
           // Buscar perfil do usuário quando autenticado
           setTimeout(() => {
             fetchUserProfile(session.user.id);
           }, 0);
         } else {
+          console.log('🚪 Usuário não autenticado, limpando perfil');
           setUserProfile(null);
         }
         
@@ -75,10 +80,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Verificar sessão existente
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔍 Verificando sessão existente:', { hasSession: !!session, hasUser: !!session?.user });
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        console.log('👤 Sessão existente encontrada, buscando perfil...');
         fetchUserProfile(session.user.id);
       }
       

@@ -142,7 +142,7 @@ const VideoModal: React.FC<VideoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
@@ -152,13 +152,15 @@ const VideoModal: React.FC<VideoModalProps> = ({
       {/* Modal */}
       <div 
         id="video-modal"
-        className={`relative w-full max-w-6xl mx-4 bg-background rounded-2xl shadow-2xl overflow-hidden ${
-          isFullscreen ? 'h-screen max-w-none mx-0 rounded-none' : 'max-h-[90vh]'
+        className={`relative w-full max-w-6xl bg-background rounded-2xl shadow-2xl overflow-hidden ${
+          isFullscreen 
+            ? 'h-screen max-w-none mx-0 rounded-none fixed inset-0' 
+            : 'max-h-[calc(100vh-8rem)] my-auto'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
-          <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-center p-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
+          <div className="flex-1 min-w-0 text-center">
             <h2 className="text-lg font-semibold text-foreground truncate">
               {title}
             </h2>
@@ -204,8 +206,8 @@ const VideoModal: React.FC<VideoModalProps> = ({
         </div>
         
         {/* Video Player */}
-        <div className={`relative bg-black ${
-          isFullscreen ? 'h-[calc(100vh-80px)]' : 'aspect-video'
+        <div className={`relative bg-black flex items-center justify-center ${
+          isFullscreen ? 'h-[calc(100vh-80px)]' : 'aspect-video max-h-[calc(100vh-16rem)]'
         }`}>
           <div 
             ref={playerRef}
@@ -225,7 +227,7 @@ const VideoModal: React.FC<VideoModalProps> = ({
         
         {/* Description */}
         {!isFullscreen && description && (
-          <div className="p-4 max-h-32 overflow-y-auto">
+          <div className="p-4 max-h-32 overflow-y-auto text-center">
             <p className="text-sm text-muted-foreground leading-relaxed">
               {description}
             </p>

@@ -10,6 +10,10 @@ import Dashboard from "./pages/Dashboard";
 import Mentor from "./pages/Mentor";
 import Logbook from "./pages/Logbook";
 import Mindset from "./pages/Mindset";
+import Subscription from "./pages/Subscription";
+import PromoLanding from "./pages/PromoLanding";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
+import CheckoutCancel from "./pages/CheckoutCancel";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +37,10 @@ const App = () => (
             <Route path="/mentor" element={<Mentor />} />
             <Route path="/logbook" element={<Logbook />} />
             <Route path="/mindset" element={<Mindset />} />
+            <Route path="/subscription" element={<Subscription />} />
+            <Route path="/promo" element={<PromoLanding />} />
+            <Route path="/checkout/success" element={<CheckoutSuccess />} />
+            <Route path="/checkout/cancel" element={<CheckoutCancel />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

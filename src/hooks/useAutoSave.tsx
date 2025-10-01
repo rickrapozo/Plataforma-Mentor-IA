@@ -6,12 +6,14 @@ export interface Message {
   content: string;
   isUser: boolean;
   timestamp: Date;
+  audioBlob?: Blob; // Campo opcional para mensagens de áudio
+  audioUrl?: string; // URL para reprodução do áudio
 }
 
 export interface ChatSession {
   id: string;
   date: string;
-  preview: string;
+  title: string;
   messages: Message[];
 }
 
@@ -48,6 +50,36 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
 
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+  const generateTitle = (messages: Message[]): string => {
+    const firstUserMessage = messages.find(m => m.isUser);
+    if (!firstUserMessage) return 'Nova conversa';
+    
+    // Extrair palavras-chave da primeira mensagem do usuário
+    const content = firstUserMessage.content.toLowerCase();
+    const words = content.split(' ').filter(word => word.length > 3);
+    
+    // Pegar as primeiras 3-4 palavras significativas
+    const significantWords = words.slice(0, 3);
+    
+    if (significantWords.length === 0) {
+      return 'Nova conversa';
+    }
+    
+    // Capitalizar primeira letra de cada palavra
+    const title = significantWords
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    
+    return title.length > 30 ? title.substring(0, 30) + '...' : title;
+  };
+
+  const formatCompactDate = (date: Date): string => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  };
+
   const saveSession = useCallback(async (session: ChatSession, userId?: string) => {
     // Limpar timeout anterior se existir
     if (debounceTimeoutRef.current) {
@@ -63,22 +95,31 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
       
       while (attempt < maxRetries) {
         try {
-          // Validar dados antes de salvar
+          // Validar dados antes de salvar - só salvar se houver mensagens do usuário
           if (!session.id || !session.messages || session.messages.length === 0) {
-            throw new Error('Dados da sessão inválidos');
+            console.log('⏭️ Sessão não salva: sem ID ou mensagens');
+            setAutoSaveLoading(false);
+            return;
+          }
+
+          // Verificar se há pelo menos uma mensagem do usuário
+          const hasUserMessages = session.messages.some(m => m.isUser);
+          if (!hasUserMessages) {
+            console.log('⏭️ Sessão não salva: nenhuma mensagem do usuário encontrada');
+            setAutoSaveLoading(false);
+            return;
           }
 
           if (!userId) {
             throw new Error('user_id é obrigatório para salvar sessão');
           }
 
-          // Preparar dados para salvamento
+          // Preparar dados para salvamento com título automático e data compacta
+          const currentDate = new Date();
           const sessionData = {
             id: session.id,
-            date: session.date || new Date().toISOString(),
-            preview: session.preview || (session.messages.length > 0 ? 
-              session.messages.find(m => m.isUser)?.content.substring(0, 100) + '...' || 
-              'Nova conversa' : 'Nova conversa'),
+            date: formatCompactDate(currentDate),
+            title: session.title || generateTitle(session.messages),
             messages: session.messages.map(msg => ({
               ...msg,
               timestamp: msg.timestamp instanceof Date ? msg.timestamp.toISOString() : msg.timestamp
@@ -142,7 +183,7 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
         return {
           id: sessionData.id,
           date: sessionData.date,
-          preview: sessionData.preview,
+          title: sessionData.title || sessionData.preview || 'Nova conversa', // Compatibilidade com dados antigos
           messages: sessionData.messages.map((msg: any) => ({
             ...msg,
             timestamp: new Date(msg.timestamp)
@@ -182,7 +223,7 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
       return {
         id: sessionData.id,
         date: sessionData.date,
-        preview: sessionData.preview,
+        title: sessionData.title || sessionData.preview || 'Nova conversa', // Compatibilidade com dados antigos
         messages: sessionData.messages.map((msg: any) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
@@ -202,15 +243,10 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
         throw new Error('ID do usuário é obrigatório');
       }
 
+      // Apenas criar o ID da sessão, não salvar ainda
       const sessionId = crypto.randomUUID();
-      const initialSession: ChatSession = {
-        id: sessionId,
-        date: new Date().toISOString(),
-        preview: 'Nova conversa',
-        messages: []
-      };
-
-      await saveSession(initialSession, userId);
+      console.log('🆕 Nova sessão criada (ID apenas):', sessionId);
+      
       return sessionId;
 
     } catch (error) {
@@ -218,7 +254,7 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
       setSaveError(error instanceof Error ? error.message : 'Erro ao criar sessão');
       throw error;
     }
-  }, [saveSession]);
+  }, []);
 
   const deleteSession = useCallback(async (sessionId: string, userId: string): Promise<void> => {
     try {

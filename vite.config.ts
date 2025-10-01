@@ -10,9 +10,9 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api/webhook': {
-        target: 'https://primary-production-33a76.up.railway.app',
+        target: 'https://primary-production-5219.up.railway.app',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/webhook/, '/webhook-test/1d3e78ad-8168-407f-a0d5-4ff71991b0d1'),
+        rewrite: (path) => path.replace(/^\/api\/webhook/, '/webhook-test/terapeuta-ai-webhook'),
         secure: true,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
       '/api/webhook-response': {
-        target: 'https://primary-production-33a76.up.railway.app',
+        target: 'https://primary-production-5219.up.railway.app',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/webhook-response/, '/webhook-response'),
         secure: true,

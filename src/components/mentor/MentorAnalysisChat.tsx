@@ -9,6 +9,7 @@ interface Message {
   content: string;
   isUser: boolean;
   timestamp: Date;
+  audioBlob?: Blob; // Campo opcional para mensagens de áudio
 }
 
 interface MentorAnalysisChatProps {
@@ -122,7 +123,8 @@ export default function MentorAnalysisChat({ analysis, onClose }: MentorAnalysis
 
   // Função para enviar mensagem para o webhook do n8n
   const sendMessageToWebhook = async (message: string): Promise<string> => {
-    const webhookUrl = 'https://primary-production-33a76.up.railway.app/webhook/1d3e78ad-8168-407f-a0d5-4ff71991b0d1';
+    // Usar proxy local para evitar problemas de CORS
+    const webhookUrl = '/api/webhook';
     
     const payload = {
       message: message,
@@ -130,9 +132,8 @@ export default function MentorAnalysisChat({ analysis, onClose }: MentorAnalysis
       auth_user_id: user?.id || '',
       nome_usuario: userProfile?.full_name || user?.user_metadata?.full_name || user?.email || 'Usuário',
       acao: "conversa",
+      tipo: "text" // Tipo da mensagem padronizado
     };
-
-    console.log('🚀 Enviando mensagem para webhook do mentor:', payload);
 
     try {
       const response = await fetch(webhookUrl, {
@@ -143,28 +144,17 @@ export default function MentorAnalysisChat({ analysis, onClose }: MentorAnalysis
         body: JSON.stringify(payload),
       });
 
-      console.log('📡 Resposta do webhook recebida:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok
-      });
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Dados do webhook:', data);
         
         // Verificar se a resposta é um array (múltiplas respostas)
         if (Array.isArray(data)) {
-          console.log('📋 Resposta é um array com', data.length, 'itens');
           for (const item of data) {
-            console.log('🔍 Item do array do webhook:', item);
             if (item && (item.analysis || item.response || item.message || item.output)) {
               const validResponse = item.analysis || item.response || item.message || item.output;
-              console.log('✅ Resposta válida encontrada no array:', validResponse);
               return validResponse;
             }
           }
-          console.warn('⚠️ Nenhuma resposta válida encontrada no array');
           return "Desculpe, não consegui processar sua mensagem no momento. Tente novamente.";
         }
         
@@ -172,8 +162,6 @@ export default function MentorAnalysisChat({ analysis, onClose }: MentorAnalysis
         if (data && (data.analysis || data.response || data.message)) {
           return data.analysis || data.response || data.message;
         } else {
-          console.log('🔄 Resposta não contém análise completa, iniciando polling...');
-          
           // Mostrar mensagem de progresso
           const progressMessage = "🧠 O Mentor está elaborando sua resposta. Por favor aguarde.";
           
@@ -291,20 +279,16 @@ Encontramos algo que não esperávamos, mas nossa equipe já foi notificada.
         
         if (response.ok) {
           const data = await response.json();
-          console.log(`✅ Resposta encontrada na tentativa ${attemptIndex + 1}:`, data);
           
           if (data && (data.analysis || data.response || data.message)) {
             return data.analysis || data.response || data.message;
           }
-        } else {
-          console.log(`⏳ Resposta ainda não disponível, tentativa ${attemptIndex + 1}`);
         }
       } catch (error) {
-        console.error(`❌ Erro na tentativa ${attemptIndex + 1}:`, error);
+        // Erro silencioso durante polling
       }
     }
     
-    console.log('⏰ Todas as tentativas de polling foram concluídas');
     return `⏱️ Análise em Andamento
 
 Seu Mentor está dedicando atenção especial à sua mensagem.
