@@ -124,15 +124,18 @@ export default function MentorAnalysisChat({ analysis, onClose }: MentorAnalysis
   // Função para enviar mensagem para o webhook do n8n
   const sendMessageToWebhook = async (message: string): Promise<string> => {
     // Usar proxy local para evitar problemas de CORS
-    const webhookUrl = '/api/webhook';
+    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook/diariodebordoai';
     
     const payload = {
-      message: message,
-      user_id: userProfile?.id || '',
-      auth_user_id: user?.id || '',
-      nome_usuario: userProfile?.full_name || user?.user_metadata?.full_name || user?.email || 'Usuário',
-      acao: "conversa",
-      tipo: "text" // Tipo da mensagem padronizado
+      body: {
+        message: message,
+        user_id: userProfile?.id || '',
+        auth_user_id: user?.id || '',
+        nome_usuario: userProfile?.full_name || user?.user_metadata?.full_name || user?.email || 'Usuário',
+        acao: "conversa",
+        tipo: "text", // Tipo da mensagem padronizado
+        time_acao: new Date().toISOString(),
+      }
     };
 
     try {

@@ -27,6 +27,8 @@ export default function Logbook() {
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [mentorAnalysis, setMentorAnalysis] = useState<string>('');
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string>('');
 
   useEffect(() => {
     if (userProfile) {
@@ -99,6 +101,15 @@ export default function Logbook() {
   };
 
   const handleMentorAnalysis = async () => {
+    if (!user || !userProfile) {
+      console.error("Usuário ou perfil do usuário não autenticado.");
+      return;
+    }
+
+    setIsLoadingAnalysis(true);
+    setAnalysisResult('🧠 O Mentor está analisando seu diário de bordo. Por favor, aguarde...');
+
+    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook/diariodebordoai';
     if (thoughts.length === 0) {
       alert('Adicione alguns pensamentos antes de solicitar uma análise.');
       return;
@@ -110,25 +121,22 @@ export default function Logbook() {
 
     try {
       const webhookData = {
-        nome_usuario: userProfile?.full_name || user?.user_metadata?.full_name || user?.email || 'Usuário',
-        id_usuario: userProfile?.id || '',
-        auth_user_id: user?.id || '',
-        horario_acao: new Date().toISOString(),
-        acao: 'Análise',
-        tipo: 'text', // Tipo da mensagem padronizado
-        pensamentos: thoughts.map(thought => ({
-          titulo: thought.title,
-          conteudo: thought.content,
-          data_criacao: thought.created_at
-        })),
-        contexto: "O usuário está solicitando uma análise de seus pensamentos registrados no diário para obter insights e clareza mental."
+        body: {
+          message: "", // Para análise, a mensagem é vazia
+          user_id: userProfile?.id || '',
+          auth_user_id: user?.id || '',
+          nome_usuario: userProfile?.full_name || user?.user_metadata?.full_name || user?.email || 'Usuário',
+          acao: 'Análise',
+          tipo: 'text',
+          time_acao: new Date().toISOString(),
+        }
       };
 
       console.log('Enviando dados para webhook:', webhookData);
 
       // Tentar enviar para o webhook primeiro
       try {
-        const response = await fetch('/api/webhook', {
+        const response = await fetch(webhookUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -255,6 +263,8 @@ export default function Logbook() {
       } else {
         setMentorAnalysis('⚠️ Situação Inesperada\n\nEncontramos uma situação que não esperávamos, mas não se preocupe!\n\n🛠️ Nossa equipe técnica:\n• Já foi notificada automaticamente\n• Está trabalhando na solução\n• Seus dados estão protegidos\n\n📞 Precisa de ajuda?\nNosso suporte está pronto para atendê-lo!\n\n🌟 Agradecemos sua paciência e confiança!');
       }
+    } finally {
+      setIsLoadingAnalysis(false);
     }
   };
 
