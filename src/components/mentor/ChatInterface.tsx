@@ -15,6 +15,7 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [hasError, setHasError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const togglePlay = () => {
@@ -40,6 +41,11 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
     }
   };
 
+  const handleError = () => {
+    setHasError(true);
+    setIsPlaying(false);
+  };
+
   const handleEnded = () => {
     setIsPlaying(false);
     setCurrentTime(0);
@@ -59,45 +65,70 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
     }
   };
 
+  // Cleanup da URL para liberar memória quando o componente desmonta
+  useEffect(() => {
+    return () => {
+      try {
+        URL.revokeObjectURL(audioUrl);
+      } catch {}
+    };
+  }, [audioUrl]);
+
   return (
     <div className="flex items-center space-x-3 bg-black/10 rounded-lg p-3 backdrop-blur-sm">
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
-      />
-      
-      <Button
-        onClick={togglePlay}
-        size="sm"
-        className="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white p-0"
-      >
-        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-      </Button>
-      
-      <div className="flex-1 flex items-center space-x-2">
-        <span className="text-xs text-muted-foreground min-w-[35px]">
-          {formatTime(currentTime)}
-        </span>
-        
-        <input
-          type="range"
-          min="0"
-          max={duration || 0}
-          value={currentTime}
-          onChange={handleSeek}
-          className="flex-1 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer slider"
-          style={{
-            background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${(currentTime / duration) * 100}%, #d1d5db ${(currentTime / duration) * 100}%, #d1d5db 100%)`
-          }}
-        />
-        
-        <span className="text-xs text-muted-foreground min-w-[35px]">
-          {formatTime(duration)}
-        </span>
-      </div>
+      {!hasError ? (
+        <>
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={handleEnded}
+            onError={handleError}
+          />
+
+          <Button
+            onClick={togglePlay}
+            size="sm"
+            className="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white p-0"
+          >
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          </Button>
+
+          <div className="flex-1 flex items-center space-x-2">
+            <span className="text-xs text-muted-foreground min-w-[35px]">
+              {formatTime(currentTime)}
+            </span>
+
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              className="flex-1 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer slider"
+              style={{
+                background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${(currentTime / duration) * 100}%, #d1d5db ${(currentTime / duration) * 100}%, #d1d5db 100%)`
+              }}
+            />
+
+            <span className="text-xs text-muted-foreground min-w-[35px]">
+              {formatTime(duration)}
+            </span>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>Não foi possível reproduzir o áudio automaticamente.</span>
+          <a
+            href={audioUrl}
+            download
+            className="underline text-amber-500 hover:text-amber-600"
+          >
+            Baixar áudio
+          </a>
+        </div>
+      )}
     </div>
   );
 });
@@ -122,17 +153,36 @@ const MessageItem = memo(({ message, formatTextWithGoldenHighlight }: {
             : "bg-card/80 backdrop-blur-sm text-foreground border-amber-500/30"
         )}
       >
-        {!message.isUser && (
+        {/* Cabeçalho: mostrar nome quando for áudio */}
+        {message.audioUrl ? (
           <div className="flex items-center space-x-2 mb-3">
-            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span className="text-sm font-medium text-amber-400 golden-wisdom">
-              O Mentor
-            </span>
+            {message.isUser ? (
+              <>
+                <User className="w-4 h-4 text-white/90" />
+                <span className="text-sm font-medium text-white/90">Você</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="text-sm font-medium text-amber-400 golden-wisdom">O Mentor</span>
+              </>
+            )}
           </div>
+        ) : (
+          !message.isUser && (
+            <div className="flex items-center space-x-2 mb-3">
+              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+              <span className="text-sm font-medium text-amber-400 golden-wisdom">O Mentor</span>
+            </div>
+          )
         )}
-        <p className="text-xs leading-relaxed">
-          {message.isUser ? message.content : formatTextWithGoldenHighlight(message.content)}
-        </p>
+
+        {/* Texto: esconder quando houver áudio */}
+        {!message.audioUrl && (
+          <p className="text-xs leading-relaxed">
+            {message.isUser ? message.content : formatTextWithGoldenHighlight(message.content)}
+          </p>
+        )}
         
         {/* Audio Player para mensagens de áudio */}
         {message.audioUrl && (
@@ -200,6 +250,54 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  // Utilitário para detecção simples de tipo de áudio por assinatura
+  const detectAudioMimeFromArrayBuffer = (buffer: ArrayBuffer): string | null => {
+    const bytes = new Uint8Array(buffer.slice(0, 16));
+    const ascii = String.fromCharCode(...bytes);
+
+    // WAV: "RIFF" ... "WAVE"
+    if (ascii.startsWith('RIFF') && ascii.includes('WAVE')) {
+      return 'audio/wav';
+    }
+
+    // OGG: "OggS"
+    if (ascii.startsWith('OggS')) {
+      return 'audio/ogg';
+    }
+
+    // MP4/M4A: contains "ftyp"
+    if (ascii.includes('ftyp')) {
+      return 'audio/mp4';
+    }
+
+    // MP3: "ID3" no início ou frame header 0xFF 0xFB/0xF3/0xF2
+    if (ascii.startsWith('ID3')) {
+      return 'audio/mpeg';
+    }
+    if (bytes.length >= 2) {
+      const b0 = bytes[0];
+      const b1 = bytes[1];
+      if (b0 === 0xff && (b1 === 0xfb || b1 === 0xf3 || b1 === 0xf2)) {
+        return 'audio/mpeg';
+      }
+    }
+
+    return null; // desconhecido
+  };
+
+  const tryMakeAudioUrlFromResponse = async (response: Response): Promise<string | null> => {
+    try {
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) return null;
+      const buf = await blob.arrayBuffer();
+      const detected = detectAudioMimeFromArrayBuffer(buf);
+      const typedBlob = detected && !blob.type ? new Blob([buf], { type: detected }) : blob;
+      return URL.createObjectURL(typedBlob);
+    } catch {
+      return null;
+    }
+  };
 
   // Função para carregar sessões do usuário usando o hook
   const loadUserSessions = async () => {
@@ -426,7 +524,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
 
     const audioMessage: Message = {
       id: audioId,
-      content: '[Mensagem de áudio]',
+      content: '',
       isUser: true,
       timestamp: new Date(),
       audioBlob: audioBlob,
@@ -440,17 +538,21 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
     setIsTyping(true);
 
     try {
-      // Enviar áudio para o webhook
-      const response = await sendMessageToWebhook('', 'audio', audioBlob);
+      // Enviar áudio para o webhook e tratar resultado
+      const result = await sendMessageToWebhook('', 'audio', audioBlob);
 
-      // Resposta do mentor
-      const mentorResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: response || "Recebi sua mensagem de áudio. Estou processando o que você disse...",
-        isUser: false,
-        timestamp: new Date()
-      };
-      addMessageWithTypingEffect(response || "Recebi sua mensagem de áudio. Estou processando o que você disse...", false);
+      if (result.type === 'audio') {
+        const mentorAudioMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: '',
+          isUser: false,
+          timestamp: new Date(),
+          audioUrl: result.audioUrl
+        };
+        setMessages(prev => [...prev, mentorAudioMessage]);
+      } else {
+        addMessageWithTypingEffect(result.text || "Recebi sua mensagem de áudio. Estou processando o que você disse...", false);
+      }
 
     } catch (error) {
       const errorMessage: Message = {
@@ -519,9 +621,11 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
     }
   }, [messages.length]); // Dependência otimizada
 
-  const sendMessageToWebhook = async (message: string, messageType: 'texto' | 'audio' = 'texto', audioData?: Blob): Promise<string> => {
+  type WebhookResult = { type: 'audio', audioUrl: string } | { type: 'text', text: string };
+
+  const sendMessageToWebhook = async (message: string, messageType: 'texto' | 'audio' = 'texto', audioData?: Blob): Promise<WebhookResult> => {
     // Usar proxy local para evitar problemas de CORS
-    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook-test/terapeuta-ai-webhook';
+    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook/terapeuta-ai-webhook';
     
     // Função para converter Blob para Base64
     const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -584,23 +688,40 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Accept': 'application/json, text/plain, */*'
             },
             body: JSON.stringify(audioPayload),
           });
 
           if (response.ok) {
+            const ct = response.headers.get('content-type') || response.headers.get('Content-Type') || '';
+            console.log('🔎 Content-Type (áudio):', ct);
+
+            if (ct.includes('audio') || ct.includes('octet-stream')) {
+              const blob = await response.blob();
+              const audioUrl = URL.createObjectURL(blob);
+              return { type: 'audio', audioUrl };
+            }
+
+            const cloneForAudio = response.clone();
             const responseText = await response.text();
             console.log('✅ Resposta do webhook (áudio):', responseText);
 
-          let data;
-          try {
-            data = JSON.parse(responseText);
-          } catch (parseError) {
-            console.log('📝 Resposta em texto puro:', responseText);
-            return responseText || "Áudio processado com sucesso!";
-          }
+            let data;
+            try {
+              data = JSON.parse(responseText);
+            } catch (parseError) {
+              console.log('📝 Resposta em texto puro:', responseText);
+              // Fallback: tentar tratar como áudio mesmo sem Content-Type confiável
+              const fallbackUrl = await tryMakeAudioUrlFromResponse(cloneForAudio);
+              if (fallbackUrl) {
+                return { type: 'audio', audioUrl: fallbackUrl };
+              }
+              return { type: 'text', text: responseText || "Áudio processado com sucesso!" };
+            }
 
-          return data.output || data.response || data.message || data.reply || responseText || "Áudio processado com sucesso!";
+            const textResp = data.output || data.response || data.message || data.reply || responseText || "Áudio processado com sucesso!";
+            return { type: 'text', text: textResp };
         } else {
           console.error('❌ Erro no webhook (áudio):', response.status, response.statusText);
           
@@ -653,7 +774,7 @@ Houve uma dificuldade na comunicação do áudio.
         }
       }
       
-      return "Desculpe, houve um problema ao processar seu áudio. Tente novamente ou use mensagens de texto.";
+      return { type: 'text', text: "Desculpe, houve um problema ao processar seu áudio. Tente novamente ou use mensagens de texto." };
     }
     } else {
       // Envio de texto normal
@@ -666,6 +787,7 @@ Houve uma dificuldade na comunicação do áudio.
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Accept': 'audio/mp3, audio/*;q=0.9, application/json;q=0.8, text/plain;q=0.7, */*;q=0.5'
             },
             body: JSON.stringify(basePayload),
           });
@@ -685,6 +807,16 @@ Houve uma dificuldade na comunicação do áudio.
             throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
           }
 
+          const ct = response.headers.get('content-type') || response.headers.get('Content-Type') || '';
+          console.log('🔎 Content-Type (texto):', ct);
+
+          if (ct.includes('audio') || ct.includes('octet-stream')) {
+            const blob = await response.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            return { type: 'audio', audioUrl };
+          }
+
+          const cloneForAudio = response.clone();
           const responseText = await response.text();
           console.log('✅ Resposta do webhook (texto):', responseText);
 
@@ -693,12 +825,17 @@ Houve uma dificuldade na comunicação do áudio.
             data = JSON.parse(responseText);
           } catch (parseError) {
             console.log('📝 Resposta em texto puro:', responseText);
-            return responseText || "Resposta recebida mas sem conteúdo.";
+            // Fallback: tentar tratar como áudio mesmo sem Content-Type confiável
+            const fallbackUrl = await tryMakeAudioUrlFromResponse(cloneForAudio);
+            if (fallbackUrl) {
+              return { type: 'audio', audioUrl: fallbackUrl };
+            }
+            return { type: 'text', text: responseText || "Resposta recebida mas sem conteúdo." };
           }
 
           const finalResponse = data.output || data.response || data.message || data.reply || responseText || "Desculpe, não consegui processar sua mensagem no momento.";
           
-          return finalResponse;
+          return { type: 'text', text: finalResponse };
         } catch (fetchError) {
           console.error('❌ Erro de fetch (texto):', fetchError);
           
@@ -893,10 +1030,21 @@ Parece que houve uma dificuldade na comunicação.
 
     try {
       // Enviar mensagem para o webhook e receber resposta
-      const aiResponse = await sendMessageToWebhook(messageContent);
-      
-      // Usar a nova função para adicionar mensagem com efeito de digitação
-      await addMessageWithTypingEffect(aiResponse, false);
+      const result = await sendMessageToWebhook(messageContent);
+
+      if (result.type === 'audio') {
+        const mentorAudioMessage: Message = {
+          id: `mentor-audio-${Date.now()}`,
+          content: '',
+          isUser: false,
+          timestamp: new Date(),
+          audioUrl: result.audioUrl
+        };
+        setMessages(prev => [...prev, mentorAudioMessage]);
+      } else {
+        // Usar a função para adicionar mensagem com efeito de digitação
+        await addMessageWithTypingEffect(result.text, false);
+      }
     } catch (error) {
       // Tratamento de erro mais específico e detalhado
       let errorMessage = "Desculpe, estou enfrentando dificuldades técnicas no momento.";
