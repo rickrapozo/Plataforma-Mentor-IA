@@ -36,8 +36,26 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
   };
 
   const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
+    const el = audioRef.current;
+    if (!el) return;
+    const d = el.duration;
+    if (!isFinite(d) || isNaN(d) || d === 0) {
+      // Força cálculo de duração em fontes sem metadados (ex.: blobs WebM)
+      const handleForcedUpdate = () => {
+        el.removeEventListener('timeupdate', handleForcedUpdate);
+        try {
+          el.currentTime = 0;
+        } catch {}
+        setDuration(isFinite(el.duration) ? el.duration : 0);
+      };
+      try {
+        el.currentTime = 1e101;
+        el.addEventListener('timeupdate', handleForcedUpdate, { once: true });
+      } catch {
+        setDuration(0);
+      }
+    } else {
+      setDuration(d);
     }
   };
 
@@ -81,6 +99,7 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
           <audio
             ref={audioRef}
             src={audioUrl}
+            preload="metadata"
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handleEnded}
@@ -100,7 +119,10 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
               {formatTime(currentTime)}
             </span>
 
-            <input
+            {(() => {
+              const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+              return (
+                <input
               type="range"
               min="0"
               max={duration || 0}
@@ -108,9 +130,11 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
               onChange={handleSeek}
               className="flex-1 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer slider"
               style={{
-                background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${(currentTime / duration) * 100}%, #d1d5db ${(currentTime / duration) * 100}%, #d1d5db 100%)`
+                background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${progress}%, #d1d5db ${progress}%, #d1d5db 100%)`
               }}
             />
+              );
+            })()}
 
             <span className="text-xs text-muted-foreground min-w-[35px]">
               {formatTime(duration)}
@@ -415,7 +439,8 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
       };
       
       recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blobType = (recorder as MediaRecorder).mimeType || 'audio/webm;codecs=opus';
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         
         if (audioBlob.size > 0) {
           setAudioBlob(audioBlob);
