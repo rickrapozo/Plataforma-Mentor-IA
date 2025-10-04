@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => ({
       '/api/webhook': {
         target: 'https://primary-production-5219.up.railway.app',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/webhook/, '/webhook/terapeuta-ai-webhook'),
+        rewrite: (path) => path.replace(/^\/api\/webhook/, '/webhook-test/terapeuta-ai-webhook'),
         secure: true,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {

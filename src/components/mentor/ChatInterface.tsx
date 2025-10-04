@@ -625,7 +625,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
 
   const sendMessageToWebhook = async (message: string, messageType: 'texto' | 'audio' = 'texto', audioData?: Blob): Promise<WebhookResult> => {
     // Usar proxy local para evitar problemas de CORS
-    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook/terapeuta-ai-webhook';
+    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook-test/terapeuta-ai-webhook';
     
     // Função para converter Blob para Base64
     const blobToBase64 = (blob: Blob): Promise<string> => {
