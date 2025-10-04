@@ -650,7 +650,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
 
   const sendMessageToWebhook = async (message: string, messageType: 'texto' | 'audio' = 'texto', audioData?: Blob): Promise<WebhookResult> => {
     // Usar proxy local para evitar problemas de CORS
-    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook-test/terapeuta-ai-webhook';
+    const webhookUrl = 'https://primary-production-5219.up.railway.app/webhook/terapeuta-ai-webhook';
     
     // Função para converter Blob para Base64
     const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -998,15 +998,29 @@ Parece que houve uma dificuldade na comunicação.
   };
 
   // Função memoizada para formatar texto com destaque dourado
+  // Suporta **duplo** e *simples* asteriscos
   const formatTextWithGoldenHighlight = useCallback((text: string): JSX.Element => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    
+    // Capturar **...** primeiro (para evitar conflito com *...*), depois *...*
+    const parts = text.split(/(\*\*.*?\*\*|\*[^*\s].*?\*)/g);
+
     return (
       <>
         {parts.map((part, index) => {
           if (part.startsWith('**') && part.endsWith('**')) {
             const highlightedText = part.slice(2, -2);
-            return <strong key={index} className="font-semibold text-amber-400 golden-wisdom">{highlightedText}</strong>;
+            return (
+              <strong key={index} className="font-semibold text-amber-400 golden-wisdom">
+                {highlightedText}
+              </strong>
+            );
+          }
+          if (part.startsWith('*') && part.endsWith('*')) {
+            const highlightedText = part.slice(1, -1);
+            return (
+              <span key={index} className="text-amber-400 golden-wisdom">
+                {highlightedText}
+              </span>
+            );
           }
           return <span key={index}>{part}</span>;
         })}
