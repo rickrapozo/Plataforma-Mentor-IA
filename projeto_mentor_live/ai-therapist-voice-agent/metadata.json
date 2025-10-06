@@ -1,0 +1,7 @@
+{
+  "name": "AI Therapist Voice Agent",
+  "description": "An interactive voice agent powered by Gemini Live, designed to act as a compassionate AI therapist, helping users navigate their psychological challenges in a safe and supportive space.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

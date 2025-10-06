@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoSave, Message, ChatSession } from "@/hooks/useAutoSave";
+import { useGeminiLive } from "../../../projeto_mentor_live/ai-therapist-voice-agent/hooks/useGeminiLive";
+import type { SessionStatus, LiveServerMessage } from "../../../projeto_mentor_live/ai-therapist-voice-agent/types";
 
 interface ChatInterfaceProps {
   className?: string;
@@ -109,7 +111,7 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
           <Button
             onClick={togglePlay}
             size="sm"
-            className="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white p-0"
+            className="w-8 h-8 rounded-full bg-primary hover:bg-primary/80 text-white p-0"
           >
             {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
           </Button>
@@ -147,7 +149,7 @@ const AudioPlayer = memo(({ audioUrl }: { audioUrl: string }) => {
           <a
             href={audioUrl}
             download
-            className="underline text-amber-500 hover:text-amber-600"
+            className="underline text-primary hover:text-primary/80"
           >
             Baixar áudio
           </a>
@@ -173,8 +175,8 @@ const MessageItem = memo(({ message, formatTextWithGoldenHighlight }: {
         className={cn(
           "max-w-[75%] rounded-2xl px-6 py-4 transition-all duration-300 hover:scale-[1.01] shadow-lg border text-left",
           message.isUser
-            ? "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-amber-500/20 border-amber-400/50"
-            : "bg-card/80 backdrop-blur-sm text-foreground border-amber-500/30"
+            ? "bg-gradient-to-br from-primary to-primary text-white shadow-primary/20 border-primary/50"
+            : "bg-card/80 backdrop-blur-sm text-foreground border-primary/30"
         )}
       >
         {/* Cabeçalho: mostrar nome quando for áudio */}
@@ -187,16 +189,16 @@ const MessageItem = memo(({ message, formatTextWithGoldenHighlight }: {
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="text-sm font-medium text-amber-400 golden-wisdom">O Mentor</span>
+                <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                <span className="text-sm font-medium text-primary golden-wisdom">O Mentor</span>
               </>
             )}
           </div>
         ) : (
           !message.isUser && (
             <div className="flex items-center space-x-2 mb-3">
-              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-              <span className="text-sm font-medium text-amber-400 golden-wisdom">O Mentor</span>
+              <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+              <span className="text-sm font-medium text-primary golden-wisdom">O Mentor</span>
             </div>
           )
         )}
@@ -217,7 +219,7 @@ const MessageItem = memo(({ message, formatTextWithGoldenHighlight }: {
         
         <div className={cn(
           "mt-2 text-xs",
-          message.isUser ? "text-amber-100" : "text-muted-foreground"
+          message.isUser ? "text-primary-foreground" : "text-muted-foreground"
         )}>
           {message.timestamp.toLocaleTimeString('pt-BR', { 
             hour: '2-digit', 
@@ -260,6 +262,46 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(() => crypto.randomUUID());
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+
+  // Sessão de voz do Gemini Live
+  const [geminiStatus, setGeminiStatus] = useState<SessionStatus>('IDLE');
+  const handleGeminiMessage = useCallback((message: LiveServerMessage) => {
+    try {
+      const parts: any[] = (message as any)?.serverContent?.modelTurn?.parts || [];
+      let text = '';
+      for (const p of parts) {
+        if (p?.text) text += `${p.text}\n`;
+        if (p?.inlineData?.mimeType?.includes('text/plain') && p?.inlineData?.data) {
+          try { text += `${atob(p.inlineData.data)}\n`; } catch {}
+        }
+      }
+      const content = (text || '').trim() || 'O Mentor respondeu com áudio.';
+      const mentorMsg: Message = {
+        id: `${Date.now()}`,
+        content,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, mentorMsg]);
+    } catch (e) {
+      console.warn('Falha ao processar mensagem do Gemini Live:', e);
+    }
+  }, []);
+  const { startSession, endSession } = useGeminiLive({
+    onStatusChange: setGeminiStatus,
+    onMessage: handleGeminiMessage,
+    onError: (error) => {
+      const msgText = typeof error === 'string' ? error : (error?.message || 'Erro ao iniciar sessão de voz.');
+      setGeminiStatus('ERROR');
+      const mentorMsg: Message = {
+        id: `${Date.now()}`,
+        content: `${msgText}\nDicas: 1) Conceda acesso ao microfone para http://localhost:8080/, 2) Verifique VITE_GEMINI_API_KEY no .env, 3) Tente em modo anônimo ou HTTPS se necessário.`,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, mentorMsg]);
+    }
+  });
   
   // Estados para funcionalidade de áudio
   const [isRecording, setIsRecording] = useState(false);
@@ -269,7 +311,7 @@ export default function ChatInterface({ className }: ChatInterfaceProps) {
   // Estados para funcionalidades de áudio
   const [recordedAudios, setRecordedAudios] = useState<{[key: string]: string}>({});
   const [recordingTime, setRecordingTime] = useState(0);
-  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1009,7 +1051,7 @@ Parece que houve uma dificuldade na comunicação.
           if (part.startsWith('**') && part.endsWith('**')) {
             const highlightedText = part.slice(2, -2);
             return (
-              <strong key={index} className="font-semibold text-amber-400 golden-wisdom">
+              <strong key={index} className="font-semibold text-primary golden-wisdom">
                 {highlightedText}
               </strong>
             );
@@ -1017,7 +1059,7 @@ Parece que houve uma dificuldade na comunicação.
           if (part.startsWith('*') && part.endsWith('*')) {
             const highlightedText = part.slice(1, -1);
             return (
-              <span key={index} className="text-amber-400 golden-wisdom">
+              <span key={index} className="text-primary golden-wisdom">
                 {highlightedText}
               </span>
             );
@@ -1154,15 +1196,15 @@ Parece que houve uma dificuldade na comunicação.
       )}>
         
         {/* Header */}
-         <div className="flex items-center justify-between p-6 border-b border-amber-500/30 bg-card/50">
+         <div className="flex items-center justify-between p-6 border-b border-primary/30 bg-card/50">
            <div className="flex items-center space-x-4">
              {/* Mentor Avatar */}
-             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400/20 to-amber-600/40 flex items-center justify-center border-2 border-amber-500/30 shadow-lg">
-               <Brain className="w-6 h-6 text-amber-400 animate-pulse" />
+             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center border-2 border-primary/30 shadow-lg">
+               <Brain className="w-6 h-6 text-primary animate-pulse" />
              </div>
              <div>
                <div className="flex items-center space-x-2">
-                 <h2 className="font-serif text-xl font-bold text-amber-400 golden-wisdom text-left">
+                 <h2 className="font-serif text-xl font-bold text-primary golden-wisdom text-left">
                    O Mentor
                  </h2>
                  {/* Status Online Permanente - Bolinha Verde */}
@@ -1173,8 +1215,8 @@ Parece que houve uma dificuldade na comunicação.
                  {/* Status de Salvamento */}
                  {autoSaveLoading && (
                    <div className="flex items-center space-x-1">
-                     <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-                     <span className="text-xs text-amber-400">Salvando...</span>
+                     <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                     <span className="text-xs text-primary">Salvando...</span>
                    </div>
                  )}
                  {lastSaveTime && !autoSaveLoading && (
@@ -1198,12 +1240,22 @@ Parece que houve uma dificuldade na comunicação.
              </div>
            </div>
            
+           {/* Controles da sessão Gemini Live */}
+           <div className="flex items-center gap-3">
+             <div className="text-xs text-muted-foreground">Gemini: {geminiStatus}</div>
+             {(geminiStatus === 'IDLE' || geminiStatus === 'CLOSED' || geminiStatus === 'ERROR') ? (
+               <Button onClick={startSession} size="sm" className="rounded-xl bg-primary text-white hover:bg-primary/80">Iniciar Voz</Button>
+             ) : (
+               <Button onClick={endSession} size="sm" className="rounded-xl bg-destructive text-white hover:bg-destructive/80">Encerrar Voz</Button>
+             )}
+           </div>
+
            {/* History Toggle Button */}
            <Button
              onClick={toggleHistory}
              variant="ghost"
              size="sm"
-             className="text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-all duration-300 rounded-xl p-3 border border-amber-500/20 hover:border-amber-500/40"
+             className="text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-300 rounded-xl p-3 border border-primary/20 hover:border-primary/40"
            >
              {showHistory ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
            </Button>
@@ -1216,18 +1268,18 @@ Parece que houve uma dificuldade na comunicação.
           {/* Thinking Animation */}
           {isTyping && (
             <div className="flex justify-start animate-in slide-in-from-bottom-2 duration-300">
-              <div className="bg-card/80 backdrop-blur-sm border border-amber-500/30 rounded-2xl px-6 py-4 shadow-lg max-w-[75%] text-left">
+              <div className="bg-card/80 backdrop-blur-sm border border-primary/30 rounded-2xl px-6 py-4 shadow-lg max-w-[75%] text-left">
                 <div className="flex items-center space-x-2 mb-3">
-                  <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                  <span className="text-sm font-medium text-amber-400 golden-wisdom">
-                    O Mentor
-                  </span>
+              <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+              <span className="text-sm font-medium text-primary golden-wisdom">
+                O Mentor
+              </span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '200ms' }} />
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '400ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '200ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '400ms' }} />
                   </div>
                   <span className="text-sm text-muted-foreground">
                     O Mentor está refletindo...
@@ -1241,8 +1293,8 @@ Parece que houve uma dificuldade na comunicação.
         </div>
 
         {/* Input Area */}
-        <div className="p-6 border-t border-amber-500/30 bg-card/50">
-          <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-amber-500/30 p-4 shadow-inner">
+        <div className="p-6 border-t border-primary/30 bg-card/50">
+          <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-primary/30 p-4 shadow-inner">
             <div className="flex space-x-3 items-center">
               <div className="flex-1">
                 <Textarea
@@ -1261,7 +1313,7 @@ Parece que houve uma dificuldade na comunicação.
                 onClick={handleSend}
                 disabled={!inputValue.trim() || isTyping}
                 className={cn(
-                  "bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-xl px-4 py-3 transition-all duration-300 shadow-lg shadow-amber-500/20 border border-amber-500/30 self-center",
+                  "bg-gradient-to-br from-primary to-primary hover:from-primary hover:to-primary/80 text-white rounded-xl px-4 py-3 transition-all duration-300 shadow-lg shadow-primary/20 border border-primary/30 self-center",
                   "hover:scale-105 hover:shadow-xl active:scale-95",
                   !inputValue.trim() || isTyping ? "opacity-50 cursor-not-allowed" : ""
                 )}

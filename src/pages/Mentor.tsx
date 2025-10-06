@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TopNavigation } from '../components/ui/TopNavigation';
 import { BottomNavigation } from '../components/ui/BottomNavigation';
-import ChatInterface from '../components/mentor/ChatInterface';
+import LiveSession from '../components/mentor/LiveSession';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../integrations/supabase/client';
 import { Sparkles, Brain, Zap } from 'lucide-react';
@@ -92,25 +92,14 @@ export default function Mentor() {
       <TopNavigation />
       
       <div className="mt-20">
-        {/* Hero Section */}
         <div className="text-center mb-8 space-y-4">
           <div className="inline-flex items-center space-x-2 bg-primary/20 backdrop-blur-sm rounded-full px-6 py-2">
             <Brain className="w-4 h-4 text-primary" />
-            <span className="text-primary font-medium">Consciência Ativada</span>
+            <span className="text-primary font-medium">Sessão ao vivo ativada</span>
           </div>
-          
-          {/* Chat Interface */}
-          <div className="my-8">
-            <ChatInterface />
-          </div>
-          
-          <h1 className="font-serif text-3xl font-bold text-foreground">
-            Mentor AI : O Santuário da Clareza
-          </h1>
-          
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Seu santuário privado onde o ruído da Matrix se silencia e sua verdade interior fala.
-          </p>
+        </div>
+        <div className="flex items-center justify-center my-8">
+          <LiveSession />
         </div>
       </div>
       

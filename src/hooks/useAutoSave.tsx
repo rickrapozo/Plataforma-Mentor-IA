@@ -17,6 +17,39 @@ export interface ChatSession {
   messages: Message[];
 }
 
+// Estrutura serializável para armazenamento em JSONB no Supabase
+type SerializableMessage = {
+  id: string;
+  content: string;
+  isUser: boolean;
+  timestamp: string; // ISO 8601
+  audioUrl?: string;
+};
+
+// Sanitiza mensagem removendo campos não serializáveis (ex.: Blob) e garantindo tipos
+function sanitizeMessageForStorage(msg: Message): SerializableMessage {
+  return {
+    id: String(msg.id),
+    content: String(msg.content ?? ''),
+    isUser: Boolean(msg.isUser),
+    timestamp: (msg.timestamp instanceof Date
+      ? msg.timestamp.toISOString()
+      : new Date(String(msg.timestamp)).toISOString()),
+    ...(msg.audioUrl ? { audioUrl: String(msg.audioUrl) } : {})
+  };
+}
+
+// Normaliza mensagem lida do banco para tipo runtime
+function normalizeMessageFromStorage(stored: any): Message {
+  return {
+    id: String(stored.id ?? crypto.randomUUID()),
+    content: String(stored.content ?? ''),
+    isUser: Boolean(stored.isUser),
+    timestamp: new Date(String(stored.timestamp ?? new Date().toISOString())),
+    ...(stored.audioUrl ? { audioUrl: String(stored.audioUrl) } : {})
+  };
+}
+
 interface UseAutoSaveOptions {
   debounceMs?: number;
   maxRetries?: number;
@@ -45,7 +78,7 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef<number>(0);
 
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -83,7 +116,7 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
   const saveSession = useCallback(async (session: ChatSession, userId?: string) => {
     // Limpar timeout anterior se existir
     if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
+      clearTimeout(debounceTimeoutRef.current as unknown as number);
     }
 
     // Configurar novo debounce
@@ -120,10 +153,7 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
             id: session.id,
             date: formatCompactDate(currentDate),
             title: session.title || generateTitle(session.messages),
-            messages: session.messages.map(msg => ({
-              ...msg,
-              timestamp: msg.timestamp instanceof Date ? msg.timestamp.toISOString() : msg.timestamp
-            }))
+            messages: session.messages.map(sanitizeMessageForStorage)
           };
 
           // Salvar no Supabase com user_id
@@ -179,15 +209,13 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
       }
 
       return (data || []).map(session => {
-        const sessionData = session.session_data;
+        const sessionData = session.session_data || {};
+        const rawMessages = Array.isArray(sessionData.messages) ? sessionData.messages : [];
         return {
-          id: sessionData.id,
-          date: sessionData.date,
-          title: sessionData.title || sessionData.preview || 'Nova conversa', // Compatibilidade com dados antigos
-          messages: sessionData.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
+          id: String(sessionData.id ?? session.id ?? crypto.randomUUID()),
+          date: String(sessionData.date ?? new Date().toLocaleDateString('pt-BR')),
+          title: String(sessionData.title ?? sessionData.preview ?? 'Nova conversa'),
+          messages: rawMessages.map(normalizeMessageFromStorage)
         };
       });
 
@@ -219,15 +247,13 @@ export function useAutoSave(options: UseAutoSaveOptions = {}): UseAutoSaveReturn
         throw error;
       }
 
-      const sessionData = data.session_data;
+      const sessionData = data.session_data || {};
+      const rawMessages = Array.isArray(sessionData.messages) ? sessionData.messages : [];
       return {
-        id: sessionData.id,
-        date: sessionData.date,
-        title: sessionData.title || sessionData.preview || 'Nova conversa', // Compatibilidade com dados antigos
-        messages: sessionData.messages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
+        id: String(sessionData.id ?? data.id ?? crypto.randomUUID()),
+        date: String(sessionData.date ?? new Date().toLocaleDateString('pt-BR')),
+        title: String(sessionData.title ?? sessionData.preview ?? 'Nova conversa'),
+        messages: rawMessages.map(normalizeMessageFromStorage)
       };
 
     } catch (error) {
